@@ -1,0 +1,43 @@
+services:
+  api:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+    environment: &env
+      APP_ENV: production
+      DATABASE_URL: postgresql+psycopg://evalforge:${POSTGRES_PASSWORD:?required}@postgres:5432/evalforge
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      OIDC_ISSUER: ${OIDC_ISSUER:?required}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:?required}
+      OIDC_JWKS_URL: ${OIDC_JWKS_URL:?required}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      JUDGE_API_URL: ${JUDGE_API_URL:-}
+      JUDGE_API_KEY: ${JUDGE_API_KEY:-}
+      JUDGE_MODEL: ${JUDGE_MODEL:-}
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on: [postgres, redis]
+    restart: unless-stopped
+  worker:
+    build: .
+    command: celery -A app.jobs.celery_app worker --loglevel=info --concurrency=2
+    environment: *env
+    depends_on: [postgres, redis]
+    restart: unless-stopped
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: evalforge
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: evalforge
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: ["redis_data:/data"]
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes: ["./observability/collector.yaml:/etc/otelcol/config.yaml:ro"]
+volumes:
+  postgres_data:
+  redis_data:

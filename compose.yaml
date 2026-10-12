@@ -1,0 +1,21 @@
+services:
+  evalforge:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      DATABASE_URL: sqlite:////data/evalforge.db
+      EVALFORGE_API_KEY: ${EVALFORGE_API_KEY:?Set EVALFORGE_API_KEY in your environment}
+      JUDGE_API_URL: ${JUDGE_API_URL:-}
+      JUDGE_API_KEY: ${JUDGE_API_KEY:-}
+      JUDGE_MODEL: ${JUDGE_MODEL:-}
+    volumes:
+      - evalforge_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+volumes:
+  evalforge_data:
