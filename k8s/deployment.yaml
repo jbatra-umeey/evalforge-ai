@@ -1,0 +1,58 @@
+# Requires externally managed Postgres, Redis, OIDC, TLS ingress and sealed secrets.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: evalforge-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: evalforge-api}
+  template:
+    metadata:
+      labels: {app: evalforge-api}
+    spec:
+      containers:
+      - name: api
+        image: registry.example.com/evalforge-ai:REPLACE_WITH_IMMUTABLE_DIGEST
+        ports: [{containerPort: 8000}]
+        envFrom: [{secretRef: {name: evalforge-env}}]
+        readinessProbe:
+          httpGet: {path: /health, port: 8000}
+          initialDelaySeconds: 10
+        livenessProbe:
+          httpGet: {path: /health, port: 8000}
+          initialDelaySeconds: 20
+        resources:
+          requests: {cpu: 100m, memory: 256Mi}
+          limits: {cpu: '1', memory: 1Gi}
+        securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, capabilities: {drop: [ALL]}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: evalforge-api
+spec:
+  selector: {app: evalforge-api}
+  ports: [{port: 80, targetPort: 8000}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: evalforge-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: evalforge-worker}
+  template:
+    metadata:
+      labels: {app: evalforge-worker}
+    spec:
+      containers:
+      - name: worker
+        image: registry.example.com/evalforge-ai:REPLACE_WITH_IMMUTABLE_DIGEST
+        command: [celery, -A, app.jobs.celery_app, worker, --loglevel=info, --concurrency=2]
+        envFrom: [{secretRef: {name: evalforge-env}}]
+        resources:
+          requests: {cpu: 100m, memory: 256Mi}
+          limits: {cpu: '1', memory: 1Gi}
+        securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, capabilities: {drop: [ALL]}}
